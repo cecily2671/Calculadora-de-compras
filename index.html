@@ -6,6 +6,348 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mi calculadora de compras</title>
 <style>
+* { box-sizing: border-box; }
+body {
+  font-family: Arial, sans-serif;
+  background: #eef6ff;
+  padding: 16px;
+  color: #17324d;
+}
+main { max-width: 450px; margin: auto; }
+h1, h2 { text-align: center; }
+input, button {
+  width: 100%;
+  padding: 14px;
+  margin: 7px 0;
+  font-size: 18px;
+  border-radius: 10px;
+}
+input { border: 1px solid #aaa; }
+button {
+  background: #1674d1;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+button:disabled { opacity: .5; }
+.secundario { background: #526b83; }
+.guardar { background: #168451; }
+li {
+  background: white;
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+ul { padding-left: 0; list-style: none; }
+.total {
+  font-size: 26px;
+  font-weight: bold;
+  text-align: center;
+}
+.tarjeta {
+  background: white;
+  padding: 15px;
+  margin: 15px 0;
+  border-radius: 12px;
+}
+.numero {
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+}
+.pequeno { font-size: 14px; }
+.borrar {
+  background: #bd3544;
+  font-size: 14px;
+  padding: 9px;
+}
+</style>
+</head>
+<body>
+<main>
+<h1>🛒 Mi calculadora de compras</h1>
+
+<input id="producto" placeholder="Nombre del producto">
+<input id="precio" type="number" step="0.01"
+       min="0" placeholder="Precio">
+<input id="cantidad" type="number" min="1"
+       step="1" value="1">
+
+<button onclick="agregar()">Agregar producto</button>
+
+<ul id="lista"></ul>
+
+<p class="total">
+Total: $<span id="total">0,00</span>
+</p>
+
+<button class="guardar" onclick="guardarCompra()">
+💾 Guardar compra
+</button>
+
+<button class="secundario" onclick="limpiar()">
+Nueva compra
+</button>
+
+<h2>📊 Mis gastos</h2>
+
+<div class="tarjeta">
+  <h3>📅 Gastos de hoy</h3>
+  <p class="numero" id="gastoHoy">$0,00</p>
+</div>
+
+<div class="tarjeta">
+  <h3>🗓️ Gastos del mes</h3>
+  <p class="numero" id="gastoMes">$0,00</p>
+</div>
+
+<div class="tarjeta">
+  <h3>Consultar gastos por día</h3>
+  <input type="date" id="fechaConsulta"
+         onchange="mostrarHistorial()">
+  <p id="totalFecha"></p>
+</div>
+
+<h2>📋 Historial de compras</h2>
+<ul id="historial"></ul>
+
+</main>
+
+<script>
+const CLAVE = "mis_compras_guardadas_v1";
+let productos = [];
+let compras = [];
+
+function dinero(numero) {
+  return "$" + numero.toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function fechaLocal(fecha = new Date()) {
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+  const dia = String(fecha.getDate()).padStart(2, "0");
+  return anio + "-" + mes + "-" + dia;
+}
+
+function cargarDatos() {
+  try {
+    const datos = JSON.parse(
+      localStorage.getItem(CLAVE) || "[]"
+    );
+    compras = Array.isArray(datos) ? datos : [];
+  } catch (error) {
+    compras = [];
+    alert("No se pudo leer el historial guardado.");
+  }
+}
+
+function persistir() {
+  try {
+    localStorage.setItem(CLAVE, JSON.stringify(compras));
+    return true;
+  } catch (error) {
+    alert("No se pudo guardar. Revisá el espacio disponible.");
+    return false;
+  }
+}
+
+function agregar() {
+  const nombre = document.getElementById("producto")
+    .value.trim();
+  const precioTexto = document.getElementById("precio").value;
+  const cantidadTexto = document.getElementById("cantidad").value;
+  const precio = Number(precioTexto);
+  const cantidad = Number(cantidadTexto);
+
+  if (!nombre || precioTexto === "" ||
+      cantidadTexto === "" ||
+      !Number.isFinite(precio) || precio <= 0 ||
+      !Number.isInteger(cantidad) || cantidad < 1 ||
+      !Number.isFinite(precio * cantidad)) {
+    alert("Ingresá un producto, precio y cantidad válidos");
+    return;
+  }
+
+  productos.push({
+    nombre: nombre,
+    precio: precio,
+    cantidad: cantidad
+  });
+
+  mostrarCompra();
+
+  document.getElementById("producto").value = "";
+  document.getElementById("precio").value = "";
+  document.getElementById("cantidad").value = "1";
+}
+
+function totalCompra() {
+  return productos.reduce((suma, p) =>
+    suma + p.precio * p.cantidad, 0);
+}
+
+function mostrarCompra() {
+  const lista = document.getElementById("lista");
+  lista.innerHTML = "";
+
+  productos.forEach(p => {
+    const item = document.createElement("li");
+    item.textContent = p.nombre + " — " +
+      p.cantidad + " x " + dinero(p.precio) +
+      " = " + dinero(p.precio * p.cantidad);
+    lista.appendChild(item);
+  });
+
+  document.getElementById("total").textContent =
+    dinero(totalCompra()).slice(1);
+}
+
+function limpiar() {
+  if (productos.length &&
+      !confirm("¿Empezar una nueva compra? Los productos sin guardar se perderán.")) {
+    return;
+  }
+  productos = [];
+  mostrarCompra();
+}
+
+function guardarCompra() {
+  if (productos.length === 0) {
+    alert("Primero agregá algún producto.");
+    return;
+  }
+
+  const ahora = new Date();
+  const compra = {
+    id: String(ahora.getTime()) + "-" +
+        Math.random().toString(36).slice(2),
+    fecha: fechaLocal(ahora),
+    hora: ahora.toLocaleTimeString("es-AR", {
+      hour: "2-digit",
+      minute: "2-digit"
+    }),
+    productos: productos.map(p => ({...p})),
+    total: totalCompra()
+  };
+
+  compras.unshift(compra);
+
+  if (!persistir()) {
+    compras.shift();
+    return;
+  }
+
+  productos = [];
+  mostrarCompra();
+  actualizarGastos();
+  alert("¡Compra guardada correctamente!");
+}
+
+function sumarCompras(lista) {
+  return lista.reduce((suma, c) => suma + c.total, 0);
+}
+
+function actualizarGastos() {
+  const hoy = fechaLocal();
+  const mes = hoy.slice(0, 7);
+
+  const comprasHoy = compras.filter(c =>
+    c.fecha === hoy
+  );
+  const comprasMes = compras.filter(c =>
+    c.fecha.startsWith(mes)
+  );
+
+  document.getElementById("gastoHoy").textContent =
+    dinero(sumarCompras(comprasHoy));
+
+  document.getElementById("gastoMes").textContent =
+    dinero(sumarCompras(comprasMes));
+
+  mostrarHistorial();
+}
+
+function mostrarHistorial() {
+  const fecha = document.getElementById("fechaConsulta").value;
+  const lista = document.getElementById("historial");
+  lista.innerHTML = "";
+
+  const filtradas = fecha
+    ? compras.filter(c => c.fecha === fecha)
+    : compras;
+
+  document.getElementById("totalFecha").textContent =
+    fecha ? "Total del día: " + dinero(sumarCompras(filtradas))
+          : "Mostrando todas las compras";
+
+  if (filtradas.length === 0) {
+    const item = document.createElement("li");
+    item.textContent = "Todavía no hay compras registradas.";
+    lista.appendChild(item);
+    return;
+  }
+
+  filtradas.forEach(compra => {
+    const item = document.createElement("li");
+
+    const titulo = document.createElement("strong");
+    titulo.textContent = compra.fecha + " - " +
+      compra.hora + " | " + dinero(compra.total);
+    item.appendChild(titulo);
+
+    compra.productos.forEach(p => {
+      const detalle = document.createElement("p");
+      detalle.className = "pequeno";
+      detalle.textContent = p.nombre + " (" +
+        p.cantidad + ") - " +
+        dinero(p.precio * p.cantidad);
+      item.appendChild(detalle);
+    });
+
+    const boton = document.createElement("button");
+    boton.className = "borrar";
+    boton.textContent = "Eliminar esta compra";
+    boton.onclick = () => eliminarCompra(compra.id);
+    item.appendChild(boton);
+
+    lista.appendChild(item);
+  });
+}
+
+function eliminarCompra(id) {
+  if (!confirm("¿Eliminar esta compra del historial?")) {
+    return;
+  }
+
+  const anteriores = compras;
+  compras = compras.filter(c => c.id !== id);
+
+  if (!persistir()) {
+    compras = anteriores;
+    return;
+  }
+
+  actualizarGastos();
+}
+
+cargarDatos();
+mostrarCompra();
+actualizarGastos();
+</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi calculadora de compras</title>
+<style>
 body {
   font-family: Arial, sans-serif;
   background: #eef6ff;
